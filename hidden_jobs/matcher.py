@@ -6,21 +6,52 @@ from dataclasses import dataclass
 
 # Built-in synonym groups. If the user types any term of a group, all terms are searched.
 SYNONYM_GROUPS: list[list[str]] = [
-    ["SOC", "SOC Analyst", "אנליסט SOC", "Security Operations", "Tier 1", "Tier 2", "מוקד סייבר", "אנליסט סייבר", "Cyber Analyst"],
-    ["NOC", "NOC Engineer", "מהנדס NOC", "Network Operations", "מוקדן NOC", "אנשי NOC"],
-    ["Cyber", "סייבר", "Cyber Security", "Cybersecurity", "Information Security", "אבטחת מידע", "InfoSec"],
-    ["Penetration Tester", "PT", "Pentester", "בודק חדירות", "Red Team", "Offensive Security"],
-    ["DevOps", "דבאופס", "SRE", "Site Reliability", "Platform Engineer"],
-    ["QA", "בודק תוכנה", "Quality Assurance", "Automation Engineer", "QA Automation", "בדיקות תוכנה"],
-    ["Helpdesk", "Help Desk", "תמיכה טכנית", "Technical Support", "IT Support", "Desktop Support", "תומך מחשוב"],
+    # SOC & Incident Response
+    ["SOC", "SOC Analyst", "אנליסט SOC", "Security Operations", "Tier 1", "Tier 2", "מוקד סייבר", "אנליסט סייבר", "Cyber Analyst", "SOC Manager"],
+    ["Incident Response", "IR", "DFIR", "Forensics", "תגובה לאירועים", "פורנזיקה", "Threat Hunter", "מומחה היתקלות"],
+    
+    # NOC & Infrastructure
+    ["NOC", "NOC Engineer", "מהנדס NOC", "Network Operations", "מוקדן NOC", "אנשי NOC", "NOC Manager"],
+    
+    # General Cyber Security
+    ["Cyber", "סייבר", "Cyber Security", "Cybersecurity", "Information Security", "אבטחת מידע", "InfoSec", "CISO", "מנהל אבטחת מידע"],
+    ["Cloud Security", "أمن السحابة", "אבטחת ענן", "DevSecOps", "AppSec", "Product Security"],
+    
+    # Offensive Security & GRC
+    ["Penetration Tester", "PT", "Pentester", "בודק חדירות", "Red Team", "Offensive Security", "Ethical Hacker", "האקר אטי"],
+    ["GRC", "Compliance", "רגולציה", "Risk", "ניהול סיכונים", "Governance", "Auditor", "מבקר מערכות מידע"],
+    
+    # DevOps & Infrastructure / SRE
+    ["DevOps", "דבאופס", "SRE", "Site Reliability", "Platform Engineer", "Cloud Engineer", "Infrastructure Engineer", "מהנדס תשתיות"],
+    
+    # Software Engineering & Development
+    [
+        "Software Engineer", "Software Developer", "מפתח תוכנה", "מתכנת", 
+        "Backend Developer", "Full Stack", "Fullstack", "Frontend Developer", 
+        "מפתח פולסטאק", "מפתח בקאנד", "מפתח פרונטאנד", "Software Architect", "ארכיטקט תוכנה", "Tech Lead"
+    ],
+    
+    # Data, BI & AI / ML
+    ["Data Analyst", "אנליסט נתונים", "BI Analyst", "BI Developer", "Data Analytics", "Business Intelligence"],
+    ["Data Scientist", "מדען נתונים", "AI Engineer", "ML Engineer", "Machine Learning", "Deep Learning", "מהנדס למידת מכונה"],
+    ["Data Engineer", "מהנדס נתונים", "ETL Developer", "Data Pipeline"],
+    
+    # QA & Testing
+    ["QA", "בודק תוכנה", "Quality Assurance", "Automation Engineer", "QA Automation", "בדיקות תוכנה", "Manual QA", "QA Manager"],
+    
+    # IT & Support
+    ["Helpdesk", "Help Desk", "תמיכה טכנית", "Technical Support", "IT Support", "Desktop Support", "תומך מחשוב", "Service Desk"],
     ["System Administrator", "Sysadmin", "מנהל רשת", "מנהל מערכות", "System Engineer", "IT Administrator", "איש סיסטם"],
     ["Network Engineer", "מהנדס רשתות", "Network Administrator", "רשתות תקשורת"],
-    ["Data Analyst", "אנליסט נתונים", "BI Analyst", "BI Developer", "Data Analytics"],
-    ["Software Engineer", "Software Developer", "מפתח תוכנה", "מתכנת", "Backend Developer", "Full Stack", "Fullstack", "Frontend Developer"],
     ["Data Center", "דאטה סנטר", "Data Center Technician", "טכנאי חוות שרתים", "חוות שרתים"],
-    ["Junior", "ג'וניור", "Entry Level", "סטודנט", "Student", "משרת סטודנט", "Intern", "Internship"],
-    ["GRC", "Compliance", "רגולציה", "Risk", "ניהול סיכונים", "Governance"],
-    ["Incident Response", "IR", "DFIR", "Forensics", "תגובה לאירועים", "פורנזיקה"],
+    
+    # Experience Levels
+    ["Junior", "ג'וניור", "Entry Level", "סטודנט", "Student", "משרת סטודנט", "Intern", "Internship", "מתחיל"],
+    ["Senior", "סיניור", "בכיר", "Lead", "Principal", "Director", "Head of"],
+    
+    # Product & Project Management
+    ["Product Manager", "מנהל מוצר", "PM", "Product Owner", "PO"],
+    ["Project Manager", "מנהל פרויקטים", "Scrum Master", "Agile Coach"],
 ]
 
 # Very short Latin terms (e.g. "IR", "PT") cause false positives — only match them as whole words
