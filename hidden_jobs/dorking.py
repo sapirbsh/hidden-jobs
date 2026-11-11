@@ -119,6 +119,7 @@ async def run_dorks(provider: SearchProvider, dorks: list[str], matcher: RoleMat
                 break
         progress.counters["dork_hits"] = len(jobs)
         progress.counters["dork_domains"] = len(domains)
+        progress.tick(current="dork: " + q[:60])
     return list(jobs.values()), domains
 
 

@@ -97,6 +97,10 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
                          f"{len(categories)} קטגוריות רלוונטיות"
                          + (" (מסנן חנויות/מסעדות/בילוי)" if targeting.office_only else ""))
 
+        dorks = build_dorks(roles, city_pairs, terms_per_role=2 if req.level == "quick" else 4) if use_dork else []
+        # stage-1 progress unit = one category in one city, or one dork query
+        progress.set_total((len(categories) * len(cities) if use_maps else 0) + len(dorks))
+
         async def maps_task() -> dict[str, Place]:
             if not use_maps or not cities:
                 return {}
@@ -105,7 +109,6 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
         async def dork_task():
             if not use_dork:
                 return [], {}
-            dorks = build_dorks(roles, city_pairs, terms_per_role=2 if req.level == "quick" else 4)
             progress.add_log(f"Dorking: {len(dorks)} שאילתות")
             pages = {"quick": 1, "normal": 1, "deep": 3}.get(req.level, 1)
             return await run_dorks(provider, dorks, matcher, pages, progress)
@@ -118,12 +121,13 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
         progress.add_log(f"נאספו {len(places)} אתרים ייחודיים")
 
         # ---------------- stage 2: careers pages ----------------
-        progress.set_stage("careers", "שלב 2 — חיפוש עמודי קריירה / דרושים באתרי הבית")
+        progress.set_stage("careers", "שלב 2 — חיפוש עמודי קריירה / דרושים באתרי הבית", total=len(places))
         infos: dict[str, CareerInfo] = {}
 
         async def one(p: Place):
             try:
-                return p.domain, await find_careers(p.domain, p.website, fetcher, cache)
+                # hard cap per site so one slow server can never freeze the stage
+                return p.domain, await asyncio.wait_for(find_careers(p.domain, p.website, fetcher, cache), 75)
             except Exception:  # noqa: BLE001
                 return p.domain, CareerInfo(p.domain, p.website, status="unreachable")
 
@@ -131,19 +135,23 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
             dom, info = await fut
             infos[dom] = info
             progress.inc("sites_checked")
+            progress.tick(current=dom)
             if info.career_url or info.ats:
                 progress.inc("with_careers")
+            if progress.stage_done % 100 == 0:
+                progress.add_log(f"נבדקו {progress.stage_done}/{len(places)} אתרים · "
+                                 f"{progress.counters.get('with_careers', 0)} עם עמוד קריירה")
         with_careers = [i for i in infos.values() if i.career_url or i.ats]
         progress.add_log(f"נמצאו {len(with_careers)} אתרים עם עמוד קריירה מתוך {len(infos)}")
 
         # ---------------- stage 3: match roles ----------------
-        progress.set_stage("jobs", "שלב 3 — חיפוש התפקידים בעמודי הדרושים")
+        progress.set_stage("jobs", "שלב 3 — חיפוש התפקידים בעמודי הדרושים", total=len(with_careers))
         all_jobs: list[dict] = []
         companies_out: list[dict] = []
 
         async def scan(info: CareerInfo):
             try:
-                return info, await extract_jobs(info, matcher, fetcher)
+                return info, await asyncio.wait_for(extract_jobs(info, matcher, fetcher), 120)
             except Exception:  # noqa: BLE001
                 return info, ([], 0)
 
@@ -151,6 +159,7 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
             info, (jobs, total) = await fut
             place = places.get(info.domain)
             progress.inc("careers_scanned")
+            progress.tick(current=info.domain)
             companies_out.append({
                 "company": place.name if place else info.domain, "domain": info.domain,
                 "city": place.city if place else "", "address": place.address if place else "",

@@ -25,12 +25,19 @@ class Fetcher:
         self.s = settings
         self.client = client
         self._robots: dict[str, RobotFileParser | None] = {}
-        self._robots_lock = asyncio.Lock()
+        self._robots_locks: dict[str, asyncio.Lock] = {}   # one lock PER SITE (a global lock serialised everything)
         self._host_last: dict[str, float] = {}
+        self._host_fail: dict[str, int] = {}
         self._sem = asyncio.Semaphore(settings.concurrency)
         self._browser = None
         self._pw = None
         self._browser_lock = asyncio.Lock()
+
+    def _dead(self, host: str) -> bool:
+        return self._host_fail.get(host, 0) >= 2
+
+    def _fail(self, host: str) -> None:
+        self._host_fail[host] = self._host_fail.get(host, 0) + 1
 
     # ---------- robots ----------
     async def allowed(self, url: str) -> bool:
@@ -38,41 +45,45 @@ class Fetcher:
             return True
         p = urlparse(url)
         base = f"{p.scheme}://{p.netloc}"
-        async with self._robots_lock:
-            if base not in self._robots:
-                rp = None
-                try:
-                    r = await self.client.get(base + "/robots.txt", timeout=8)
-                    if r.status_code == 200 and "text" in r.headers.get("content-type", "text"):
-                        rp = RobotFileParser()
-                        rp.parse(r.text.splitlines())
-                except Exception:
+        if base not in self._robots:
+            lock = self._robots_locks.setdefault(base, asyncio.Lock())
+            async with lock:
+                if base not in self._robots:
                     rp = None
-                self._robots[base] = rp
+                    try:
+                        async with self._sem:
+                            r = await self.client.get(base + "/robots.txt", timeout=6)
+                        if r.status_code == 200 and "text" in r.headers.get("content-type", "text"):
+                            rp = RobotFileParser()
+                            rp.parse(r.text.splitlines())
+                    except Exception:
+                        rp = None
+                    self._robots[base] = rp
         rp = self._robots[base]
         return True if rp is None else rp.can_fetch(self.s.user_agent, url)
 
     # ---------- fetch ----------
     async def get(self, url: str, render_if_empty: bool = False) -> Page | None:
-        if not await self.allowed(url):
-            return None
         host = urlparse(url).netloc
+        if self._dead(host) or not await self.allowed(url):
+            return None
+        # at most ~2 requests/second per host (wait OUTSIDE the semaphore so other sites keep going)
+        wait = 0.5 - (time.monotonic() - self._host_last.get(host, 0))
+        self._host_last[host] = time.monotonic() + max(wait, 0)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        r = None
         async with self._sem:
-            # at most ~2 requests/second per host
-            wait = 0.5 - (time.monotonic() - self._host_last.get(host, 0))
-            if wait > 0:
-                await asyncio.sleep(wait)
-            self._host_last[host] = time.monotonic()
-            try:
-                r = await self.client.get(url, timeout=self.s.request_timeout)
-            except Exception:
-                if url.startswith("https://"):
-                    try:
-                        r = await self.client.get("http://" + url[8:], timeout=self.s.request_timeout)
-                    except Exception:
-                        return None
-                else:
-                    return None
+            for attempt in ([url, "http://" + url[8:]] if url.startswith("https://") else [url]):
+                if self._dead(host):
+                    break
+                try:
+                    r = await self.client.get(attempt, timeout=self.s.request_timeout)
+                    break
+                except Exception:
+                    self._fail(host)
+        if r is None:
+            return None
         ctype = r.headers.get("content-type", "")
         if "html" not in ctype and "text" not in ctype and "json" not in ctype:
             return None

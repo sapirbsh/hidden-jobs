@@ -56,8 +56,8 @@ class Settings:
     max_search_requests: int = field(default_factory=lambda: int(os.getenv("MAX_SEARCH_REQUESTS", "150")))
 
     # Crawling
-    concurrency: int = field(default_factory=lambda: int(os.getenv("CRAWL_CONCURRENCY", "12")))
-    request_timeout: float = field(default_factory=lambda: float(os.getenv("REQUEST_TIMEOUT", "15")))
+    concurrency: int = field(default_factory=lambda: int(os.getenv("CRAWL_CONCURRENCY", "25")))
+    request_timeout: float = field(default_factory=lambda: float(os.getenv("REQUEST_TIMEOUT", "12")))
     respect_robots: bool = field(default_factory=lambda: os.getenv("RESPECT_ROBOTS", "1") == "1")
     use_playwright: bool = field(default_factory=lambda: os.getenv("USE_PLAYWRIGHT", "0") == "1")
     user_agent: str = field(default_factory=lambda: os.getenv(

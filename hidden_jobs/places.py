@@ -187,7 +187,11 @@ async def collect_places(client: PlacesClient, cities: list[City], categories: l
     max_depth = DEPTH_BY_LEVEL.get(level, 2)
     for city in cities:
         progress.add_log(f"מפות: סורק את {city.name_he} ({len(categories)} קטגוריות, עומק {max_depth})")
-        await asyncio.gather(*(client.crawl_category(city, c, max_depth, sem, sink) for c in categories))
+        async def one(cat: str) -> None:
+            await client.crawl_category(city, cat, max_depth, sem, sink)
+            progress.tick(current=f"{city.name_he} · {cat}")
+
+        await asyncio.gather(*(one(c) for c in categories))
         if client.budget.exhausted:
             progress.add_log("⚠ הגעת לתקרת הבקשות ל-Google Places — ממשיך עם מה שנאסף")
             break

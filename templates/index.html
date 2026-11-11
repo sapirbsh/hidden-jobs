@@ -34,6 +34,15 @@
   .steps{display:flex;gap:10px;margin-bottom:14px}
   .step{flex:1;background:var(--panel2);border-radius:8px;padding:10px;border:1px solid var(--line);color:var(--muted);font-size:14px}
   .step.active{border-color:var(--accent);color:var(--text)} .step.done{border-color:var(--ok);color:var(--ok)}
+  .bars{margin-bottom:14px}
+  .barrow{display:flex;justify-content:space-between;font-size:14px;margin:8px 0 5px}
+  .barrow b{font-size:18px}
+  .bar{height:12px;background:var(--panel2);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+  .bar>div{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .6s}
+  .bar.small{height:8px}
+  .eta{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin-top:8px}
+  .eta b{color:var(--text)}
+  .cur{color:var(--muted);font-size:12.5px;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .counters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}
   .ctr{background:var(--panel2);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--muted)}
   .ctr b{display:block;font-size:20px;color:var(--text)}
@@ -116,6 +125,17 @@
     <div class="step" data-s="careers">2. איתור עמודי דרושים</div>
     <div class="step" data-s="jobs">3. חיפוש התפקידים</div>
   </div>
+  <div class="bars">
+    <div class="barrow"><span>התקדמות כוללת</span><b id="overallPct">0%</b></div>
+    <div class="bar"><div id="overallBar"></div></div>
+    <div class="barrow"><span id="stageName">—</span><span id="stageCount" dir="ltr"></span></div>
+    <div class="bar small"><div id="stageBar"></div></div>
+    <div class="eta">
+      <span>זמן משוער לסיום השלב: <b id="eta">מחשב…</b></span>
+      <span>זמן שעבר: <b id="elapsed">0:00</b></span>
+    </div>
+    <div class="cur" id="current"></div>
+  </div>
   <div class="counters" id="counters"></div>
   <pre class="log" id="log"></pre>
 </div>
@@ -180,6 +200,11 @@ async function poll(){
   const order=['places','careers','jobs','done'];
   document.querySelectorAll('.step').forEach(el=>{const i=order.indexOf(el.dataset.s),cur=order.indexOf(s.stage);
     el.className='step'+(cur>i?' done':cur===i?' active':'')});
+  $('overallPct').textContent=Math.round(s.overall_pct)+'%'; $('overallBar').style.width=s.overall_pct+'%';
+  $('stageName').textContent=s.stage_label; $('stageBar').style.width=s.stage_pct+'%';
+  $('stageCount').textContent=s.stage_total?`${s.stage_done} / ${s.stage_total} · ${Math.round(s.stage_pct)}%`:'';
+  $('eta').textContent=s.done?'—':(s.eta_seconds==null?'מחשב…':fmt(s.eta_seconds));
+  $('elapsed').textContent=fmt(s.elapsed); $('current').innerHTML=s.done||!s.current?'':'עכשיו: <bdi>'+esc(s.current)+'</bdi>';
   $('counters').innerHTML=Object.entries(s.counters).map(([k,v])=>`<div class="ctr"><b>${v}</b>${LABELS[k]||k}</div>`).join('');
   $('log').textContent=s.log.join('\n'); $('log').scrollTop=1e9;
   if(s.error) $('log').innerHTML+=`\n<span class="err">${esc(s.error)}</span>`;
@@ -199,6 +224,8 @@ document.querySelectorAll('.tab[data-tab]').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab[data-tab]').forEach(x=>x.classList.remove('active'));t.classList.add('active');TAB=t.dataset.tab;draw()});
 $('filter').oninput=draw; $('only_extra').onchange=preview; $('use_synonyms').onchange=preview; $('onlyLocal').onchange=draw;
 
+function fmt(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),x=sec%60;
+  return h?`${h}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`:`${m}:${String(x).padStart(2,'0')}`}
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function link(u,t){return u?`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t||u)}</a>`:''}
 
