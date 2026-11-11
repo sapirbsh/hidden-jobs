@@ -28,7 +28,8 @@ class Fetcher:
         self._robots_locks: dict[str, asyncio.Lock] = {}   # one lock PER SITE (a global lock serialised everything)
         self._host_last: dict[str, float] = {}
         self._host_fail: dict[str, int] = {}
-        self._sem = asyncio.Semaphore(settings.concurrency)
+        # max simultaneous HTTP requests (sites in flight are limited separately in the pipeline)
+        self._sem = asyncio.Semaphore(settings.concurrency * 2)
         self._browser = None
         self._pw = None
         self._browser_lock = asyncio.Lock()
@@ -63,22 +64,28 @@ class Fetcher:
         return True if rp is None else rp.can_fetch(self.s.user_agent, url)
 
     # ---------- fetch ----------
-    async def get(self, url: str, render_if_empty: bool = False) -> Page | None:
+    async def get(self, url: str, render_if_empty: bool = False, timeout: float | None = None,
+                  try_http: bool = False) -> Page | None:
         host = urlparse(url).netloc
         if self._dead(host) or not await self.allowed(url):
             return None
-        # at most ~2 requests/second per host (wait OUTSIDE the semaphore so other sites keep going)
-        wait = 0.5 - (time.monotonic() - self._host_last.get(host, 0))
+        # at most ~3 requests/second per host (wait OUTSIDE the semaphore so other sites keep going)
+        wait = 0.3 - (time.monotonic() - self._host_last.get(host, 0))
         self._host_last[host] = time.monotonic() + max(wait, 0)
         if wait > 0:
             await asyncio.sleep(wait)
         r = None
         async with self._sem:
-            for attempt in ([url, "http://" + url[8:]] if url.startswith("https://") else [url]):
+            attempts = [url, "http://" + url[8:]] if try_http and url.startswith("https://") else [url]
+            for attempt in attempts:
                 if self._dead(host):
                     break
                 try:
-                    r = await self.client.get(attempt, timeout=self.s.request_timeout)
+                    r = await self.client.get(attempt, timeout=timeout or self.s.request_timeout)
+                    break
+                except httpx.TimeoutException:
+                    self._fail(host)
+                    self._fail(host)   # a timeout = server too slow; don't waste more time on it
                     break
                 except Exception:
                     self._fail(host)

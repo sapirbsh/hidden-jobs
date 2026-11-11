@@ -123,13 +123,18 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
         # ---------------- stage 2: careers pages ----------------
         progress.set_stage("careers", "שלב 2 — חיפוש עמודי קריירה / דרושים באתרי הבית", total=len(places))
         infos: dict[str, CareerInfo] = {}
+        # only N sites are worked on at once, so sites FINISH steadily instead of all crawling half-way
+        site_sem = asyncio.Semaphore(settings.concurrency)
 
         async def one(p: Place):
-            try:
-                # hard cap per site so one slow server can never freeze the stage
-                return p.domain, await asyncio.wait_for(find_careers(p.domain, p.website, fetcher, cache), 75)
-            except Exception:  # noqa: BLE001
-                return p.domain, CareerInfo(p.domain, p.website, status="unreachable")
+            async with site_sem:
+                try:
+                    # hard cap per site (counted only once the site actually started)
+                    return p.domain, await asyncio.wait_for(find_careers(p.domain, p.website, fetcher, cache), 45)
+                except asyncio.TimeoutError:
+                    return p.domain, CareerInfo(p.domain, p.website, status="unreachable")
+                except Exception:  # noqa: BLE001
+                    return p.domain, CareerInfo(p.domain, p.website, status="unreachable")
 
         for fut in asyncio.as_completed([one(p) for p in places.values()]):
             dom, info = await fut
@@ -150,10 +155,11 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
         companies_out: list[dict] = []
 
         async def scan(info: CareerInfo):
-            try:
-                return info, await asyncio.wait_for(extract_jobs(info, matcher, fetcher), 120)
-            except Exception:  # noqa: BLE001
-                return info, ([], 0)
+            async with site_sem:
+                try:
+                    return info, await asyncio.wait_for(extract_jobs(info, matcher, fetcher), 90)
+                except Exception:  # noqa: BLE001
+                    return info, ([], 0)
 
         for fut in asyncio.as_completed([scan(i) for i in with_careers]):
             info, (jobs, total) = await fut

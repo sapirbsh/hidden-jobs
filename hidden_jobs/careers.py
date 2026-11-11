@@ -26,11 +26,10 @@ TEXT_KEYWORDS = [
     "דרושים", "דרושות", "קריירה", "משרות", "הצטרפו", "הצטרפו אלינו", "בואו לעבוד", "לעבוד אצלנו",
     "עבודה אצלנו", "משרות פתוחות", "הצטרפו לצוות", "דרושים/ות", "גיוס עובדים",
 ]
-COMMON_PATHS = [
-    "/careers", "/career", "/jobs", "/join-us", "/careers/", "/he/careers", "/en/careers",
-    "/about/careers", "/company/careers", "/%D7%93%D7%A8%D7%95%D7%A9%D7%99%D7%9D",  # /דרושים
+COMMON_PATHS = [  # probed in parallel, first match (in this order) wins
+    "/careers", "/jobs", "/career", "/join-us", "/he/careers",
+    "/%D7%93%D7%A8%D7%95%D7%A9%D7%99%D7%9D",  # /דרושים
     "/%D7%A7%D7%A8%D7%99%D7%99%D7%A8%D7%94",  # /קריירה
-    "/%D7%9E%D7%A9%D7%A8%D7%95%D7%AA",  # /משרות
 ]
 # links on a careers page that probably lead to the full list / more pages
 LISTING_HINTS = re.compile(
@@ -115,7 +114,7 @@ async def find_careers(domain: str, website: str, fetcher: Fetcher, cache: Cache
 
 
 async def _find_careers_uncached(domain: str, website: str, fetcher: Fetcher) -> CareerInfo:
-    home = await fetcher.get(website, render_if_empty=True)
+    home = await fetcher.get(website, render_if_empty=True, try_http=True)
     info = CareerInfo(domain=domain, homepage=website)
     if not home or home.status >= 400:
         info.status = "unreachable"
@@ -136,8 +135,8 @@ async def _find_careers_uncached(domain: str, website: str, fetcher: Fetcher) ->
 
     # no visible link — probe the usual paths
     root = f"{urlparse(home.url).scheme}://{urlparse(home.url).netloc}"
-    for path in COMMON_PATHS:
-        page = await fetcher.get(root + path)
+    probes = await asyncio.gather(*(fetcher.get(root + path, timeout=7) for path in COMMON_PATHS))
+    for page in probes:
         if page and page.status == 200 and urlparse(page.url).path not in ("", "/") and page_looks_like_careers(page.html):
             info.career_url, info.method = page.url, "path"
             info.ats = list({(a.kind, a.token.lower()): a for a in info.ats + detect_ats(page.html, page.url)}.values())
