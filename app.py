@@ -11,6 +11,8 @@ import uuid
 from flask import Flask, Response, jsonify, render_template, request
 
 from hidden_jobs.config import settings
+from hidden_jobs.matcher import expand_roles
+from hidden_jobs.role_profiles import targeting_for_roles
 from hidden_jobs.pipeline import SearchRequest, run_search, save_result
 from hidden_jobs.util import Progress
 
@@ -32,6 +34,14 @@ def index():
                            has_search=bool(settings.serper_api_key or settings.brave_api_key),
                            provider=settings.search_provider,
                            max_places=settings.max_places_requests, max_search=settings.max_search_requests)
+
+
+@app.post("/api/targeting")
+def targeting():
+    data = request.get_json(force=True)
+    roles = expand_roles(_split(data.get("roles")), bool(data.get("use_synonyms", True)))
+    t = targeting_for_roles(roles, _split(data.get("extra_categories")), bool(data.get("only_extra_categories")))
+    return jsonify({"categories": t.categories, "profiles": t.profiles, "office_only": t.office_only})
 
 
 @app.post("/api/search")

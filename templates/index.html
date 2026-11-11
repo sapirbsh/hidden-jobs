@@ -68,6 +68,7 @@
       <label class="t">תפקידים</label>
       <div class="chips" id="roles"><input placeholder="למשל: SOC ↵"></div>
       <div class="hint">עברית או אנגלית. המערכת מרחיבה אוטומטית למילים נרדפות (SOC → אנליסט SOC, Tier 1…).</div>
+      <div class="hint" id="targetPreview"></div>
     </div>
   </div>
 
@@ -140,18 +141,26 @@ const LABELS = {places_requests:"בקשות Places", places_cache_hits:"מהמט
   companies_total:"סה״כ אתרים", sites_checked:"אתרים נבדקו", with_careers:"עם עמוד קריירה",
   careers_scanned:"עמודי קריירה נסרקו", matches:"התאמות"};
 
-function chips(id){
+function chips(id,onChange){
   const box=document.getElementById(id), input=box.querySelector('input'), vals=[];
-  const render=()=>{box.querySelectorAll('.chip').forEach(c=>c.remove());
+  const render=()=>{onChange&&setTimeout(onChange,0);box.querySelectorAll('.chip').forEach(c=>c.remove());
     vals.forEach((v,i)=>{const c=document.createElement('span');c.className='chip';c.textContent=v;
       const x=document.createElement('b');x.textContent='×';x.onclick=()=>{vals.splice(i,1);render()};c.appendChild(x);box.insertBefore(c,input)})};
   const add=()=>{input.value.split(',').map(s=>s.trim()).filter(Boolean).forEach(v=>{if(!vals.includes(v))vals.push(v)});input.value='';render()};
   input.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();add()}
     else if(e.key==='Backspace'&&!input.value&&vals.length){vals.pop();render()}});
   input.addEventListener('blur',add); box.addEventListener('click',()=>input.focus());
-  return {get:()=>{add();return vals.slice()}, set:a=>{vals.splice(0,vals.length,...a);render()}};
+  return {get:()=>{add();return vals.slice()}, peek:()=>vals.slice(), set:a=>{vals.splice(0,vals.length,...a);render()}};
 }
-const cities=chips('cities'), roles=chips('roles'), cats=chips('cats');
+const cities=chips('cities'), roles=chips('roles',preview), cats=chips('cats',preview);
+let _pv=null;
+function preview(){clearTimeout(_pv);_pv=setTimeout(async()=>{
+  const rs=roles.peek(); if(!rs.length){$('targetPreview').textContent='';return}
+  const t=await (await fetch('/api/targeting',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({roles:rs,extra_categories:cats.peek(),only_extra_categories:$('only_extra').checked,use_synonyms:$('use_synonyms').checked})})).json();
+  $('targetPreview').innerHTML=`<b>פרופיל: ${esc(t.profiles.join(', ')||'כללי')}</b> · ${t.categories.length} קטגוריות בגוגל מפות`+
+    (t.office_only?' · מסנן חנויות, מסעדות ובילוי':'')+`<br><span style="opacity:.8">${esc(t.categories.join(' · '))}</span>`;
+},250)}
 const $=id=>document.getElementById(id);
 let RESULT=null, TAB='jobs', JOB=null;
 
@@ -188,7 +197,7 @@ async function loadResult(id){
 
 document.querySelectorAll('.tab[data-tab]').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab[data-tab]').forEach(x=>x.classList.remove('active'));t.classList.add('active');TAB=t.dataset.tab;draw()});
-$('filter').oninput=draw; $('onlyLocal').onchange=draw;
+$('filter').oninput=draw; $('only_extra').onchange=preview; $('use_synonyms').onchange=preview; $('onlyLocal').onchange=draw;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function link(u,t){return u?`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t||u)}</a>`:''}

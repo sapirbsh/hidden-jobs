@@ -24,25 +24,7 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 
-# Business categories searched in Google Maps for every tile.
-# Mix of Hebrew + English because Google indexes Israeli places in both.
-DEFAULT_CATEGORIES = [
-    # generic employers
-    "חברה", "משרדים", "company", "office", "corporate office", "headquarters",
-    # tech
-    "חברת הייטק", "חברת תוכנה", "software company", "technology company", "startup",
-    "סייבר", "cyber security company", "IT services", "data center", "telecommunications company",
-    # finance / insurance / services
-    "בנק", "bank", "חברת ביטוח", "insurance company", "השקעות", "accounting firm", "משרד רואי חשבון",
-    "law firm", "consulting", "marketing agency",
-    # industry
-    "מפעל", "factory", "manufacturer", "logistics", "לוגיסטיקה", "engineering company", "חברת בנייה",
-    # public / health / education
-    "בית חולים", "hospital", "קופת חולים", "עירייה", "government office", "university", "college",
-    "מכללה", "research institute",
-    # retail / chains (large employers)
-    "רשת", "supermarket", "shopping mall", "hotel",
-]
+# Google Maps categories are chosen per role — see role_profiles.py
 
 # Sites we never treat as an employer homepage (social, aggregators, builders' default pages)
 IGNORED_WEBSITE_DOMAINS = {

@@ -12,11 +12,12 @@ import httpx
 from .ats import Job
 from .cache import Cache
 from .careers import CareerInfo, extract_jobs, find_careers
-from .config import DEFAULT_CATEGORIES, Settings
+from .config import Settings
 from .dorking import SearchProvider, build_dorks, run_dorks
 from .fetcher import Fetcher
 from .matcher import RoleMatcher, expand_roles
 from .places import City, Place, PlacesClient, collect_places
+from .role_profiles import targeting_for_roles
 from .util import Budget, Progress, homepage_of
 
 ISRAEL_WORDS = ["israel", "ישראל", "remote", "hybrid", "היברידי", "מרחוק"]
@@ -87,10 +88,14 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
         city_pairs = [(c.name_he, c.name_en) for c in cities] or [(c, "") for c in req.cities]
         city_names = [n for pair in city_pairs for n in pair if n]
 
-        categories = list(req.extra_categories) if req.only_extra_categories else \
-            list(dict.fromkeys(DEFAULT_CATEGORIES + req.extra_categories))
+        targeting = targeting_for_roles(roles, req.extra_categories, req.only_extra_categories)
+        categories = targeting.categories
         if req.level == "quick":
-            categories = categories[:15] + [c for c in req.extra_categories if c not in categories[:15]]
+            categories = categories[:8] + [c for c in req.extra_categories if c not in categories[:8]]
+        places_client.office_only = targeting.office_only
+        progress.add_log(f"פרופיל תפקיד: {', '.join(targeting.profiles) or 'כללי'} — "
+                         f"{len(categories)} קטגוריות רלוונטיות"
+                         + (" (מסנן חנויות/מסעדות/בילוי)" if targeting.office_only else ""))
 
         async def maps_task() -> dict[str, Place]:
             if not use_maps or not cities:

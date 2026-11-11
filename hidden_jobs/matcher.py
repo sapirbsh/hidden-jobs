@@ -41,9 +41,10 @@ def expand_roles(roles: list[str], use_synonyms: bool = True) -> list[RoleQuery]
             continue
         terms = {role}
         if use_synonyms:
-            low = role.lower()
+            role_rx = _term_regex(role)
             for group in SYNONYM_GROUPS:
-                if any(low == t.lower() or t.lower() in low or (len(low) > 3 and low in t.lower()) for t in group):
+                # whole-word match in either direction, so "Social Media" does not pull in "SOC"
+                if any(_term_regex(t).search(role) or (len(role) > 3 and role_rx.search(t)) for t in group):
                     terms.update(group)
         # ambiguous ultra-short tokens are dropped unless user typed them explicitly
         terms = {t for t in terms if len(t) > 2 or t == role}

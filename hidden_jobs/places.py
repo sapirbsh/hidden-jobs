@@ -15,6 +15,7 @@ from dataclasses import dataclass, asdict
 import httpx
 
 from .cache import DAY, Cache
+from .role_profiles import is_excluded_type
 from .util import Budget, BudgetExceeded, Progress, is_ignored_site, registrable_domain
 
 SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
@@ -82,6 +83,7 @@ class PlacesClient:
         self.cache = cache
         self.budget = budget
         self.progress = progress
+        self.office_only = False   # drop shops/food/leisure places (set per search)
 
     async def _post(self, body: dict, field_mask: str) -> dict:
         cache_key = repr(sorted(body.items())) + field_mask
@@ -161,6 +163,9 @@ class PlacesClient:
     def _add(self, raw: dict, city: City, sink: dict[str, Place]) -> None:
         website = raw.get("websiteUri")
         if not website or is_ignored_site(website):
+            return
+        if self.office_only and is_excluded_type(raw.get("types", [])):
+            self.progress.inc("places_filtered_type")
             return
         domain = registrable_domain(website)
         if domain in sink:

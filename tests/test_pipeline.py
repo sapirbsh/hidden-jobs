@@ -13,20 +13,22 @@ from hidden_jobs.config import Settings  # noqa: E402
 from hidden_jobs.matcher import RoleMatcher, expand_roles  # noqa: E402
 from hidden_jobs.pipeline import SearchRequest, run_search  # noqa: E402
 from hidden_jobs.places import Box  # noqa: E402
+from hidden_jobs.role_profiles import is_excluded_type, targeting_for_roles  # noqa: E402
 from hidden_jobs.util import Progress  # noqa: E402
 
 CITY_BOX = {"low": {"latitude": 32.05, "longitude": 34.85}, "high": {"latitude": 32.13, "longitude": 34.93}}
 
 
-def place(i, name, site):
+def place(i, name, site, types=("corporate_office",)):
     return {"id": f"p{i}", "displayName": {"text": name}, "websiteUri": site,
-            "formattedAddress": "פתח תקווה", "types": ["corporate_office"],
+            "formattedAddress": "פתח תקווה", "types": list(types),
             "location": {"latitude": 32.09, "longitude": 34.88}}
 
 
 REAL = [place(1, "Acme", "https://www.acme.co.il/"), place(2, "Beta Security", "https://beta.com"),
         place(3, "Gamma Networks", "https://gamma.co.il"), place(4, "Delta Bakery", "https://delta.com"),
-        place(5, "Down Corp", "https://down.com"), place(6, "FB Only", "https://facebook.com/somebiz")]
+        place(5, "Down Corp", "https://down.com"), place(6, "FB Only", "https://facebook.com/somebiz"),
+        place(7, "Kiosk Yossi", "https://kiosk-yossi.co.il", ("convenience_store", "store"))]
 FILLER = [place(100 + i, f"Filler {i}", f"https://filler{i}.com") for i in range(60)]
 calls = {"places": 0, "boxes": set()}
 
@@ -112,6 +114,8 @@ def test_matcher_word_boundaries():
     assert m.match("אנליסט/ית SOC Tier 1")
     assert not m.match("Social Media Manager")
     assert m.match("דרוש/ה אנליסט סייבר")
+    assert "SOC" not in expand_roles(["Social Media Manager"])[0].terms
+    assert "Tier 1" in expand_roles(["soc analyst"])[0].terms
 
 
 def test_detect_ats():
@@ -119,6 +123,19 @@ def test_detect_ats():
         "<iframe src='https://boards.greenhouse.io/embed/job_board?for=acme'></iframe>"
         "<a href='https://jobs.lever.co/foo'>x</a><a href='https://www.comeet.com/jobs/bar/AB.CDE'>y</a>")}
     assert ("greenhouse", "acme") in kinds and ("lever", "foo") in kinds and ("comeet", "bar/AB.CDE") in kinds
+
+
+def test_targeting_by_role():
+    soc = targeting_for_roles(expand_roles(["SOC"]))
+    assert "חברת סייבר" in soc.categories and soc.office_only
+    assert not any(c in soc.categories for c in ("supermarket", "hotel", "רשת"))
+    noc = targeting_for_roles(expand_roles(["NOC"]))
+    assert "internet service provider" in noc.categories
+    # "Social Media" must not trigger the SOC profile; unknown role → generic + no type filter
+    social = targeting_for_roles(expand_roles(["Social Media Manager"]))
+    assert "חברת סייבר" not in social.categories and not social.office_only
+    assert "Social Media Manager" in social.categories
+    assert is_excluded_type(["convenience_store", "store"]) and not is_excluded_type(["corporate_office", "store"])
 
 
 def test_box_split():
@@ -158,6 +175,8 @@ def test_end_to_end(tmp_path):
     without = {c["domain"]: c["status"] for c in result["companies_without_careers"]}
     assert without.get("delta.com") == "no-careers" and without.get("down.com") == "unreachable"
     assert "facebook.com" not in without
+    # kiosk filtered out by Google place type before any crawling
+    assert "kiosk-yossi.co.il" not in without and progress.counters.get("places_filtered_type", 0) >= 1
     # quadtree split happened (1 full box + 4 sub-boxes)
     assert progress.counters.get("tiles_split", 0) >= 1 and len(calls["boxes"]) == 5
 
