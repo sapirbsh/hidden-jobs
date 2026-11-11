@@ -36,11 +36,20 @@ IGNORED_WEBSITE_DOMAINS = {
 
 # Job boards — the whole point is to find what is NOT here.
 JOB_BOARD_DOMAINS = [
-    "linkedin.com", "alljobs.co.il", "drushim.co.il", "jobmaster.co.il", "indeed.com",
-    "glassdoor.com", "jobnet.co.il", "gotfriends.co.il", "jobify.co.il", "facebook.com",
-    "jobinfo.co.il", "sqlink.com", "ethosia.co.il", "nisha.co.il", "jobs.co.il",
-    "secrettelaviv.com", "techaviv.com", "builtin.com", "wellfound.com", "ziprecruiter.com",
+    # Israeli job boards (most common first — the first ones are also excluded inside dork queries)
+    "jobify360.co.il", "alljobs.co.il", "drushim.co.il", "linkedin.com", "jobmaster.co.il", "indeed.com",
+    "jobnet.co.il", "glassdoor.com", "jobkarov.com", "careerjet.co.il",
+    "jobify.co.il", "jobinfo.co.il", "jobs.co.il", "jobs.walla.co.il", "jooble.org", "jobrapido.com",
+    "talent.com", "adzuna.co.il", "whatjobs.com", "hrpro.co.il", "maavarim.org.il",
+    # placement / staffing agencies (they post other companies' jobs)
+    "gotfriends.co.il", "sqlink.com", "ethosia.co.il", "nisha.co.il", "manpower.co.il", "adecco.co.il",
+    "hunterhrms.com", "hrd.co.il", "amdocsjobs.com", "jobsil.co.il", "elad-hr.co.il", "personnel.co.il",
+    # international / communities
+    "facebook.com", "secrettelaviv.com", "techaviv.com", "builtin.com", "wellfound.com", "ziprecruiter.com",
+    "monster.com", "simplyhired.com", "careerbuilder.com",
 ]
+# a domain whose NAME looks like a job site is treated as one (jobify360, drushim-online, hasama-pro…)
+JOB_BOARD_NAME_PATTERN = r"(job|drush|dirush|hasama|דרושים)|(^|[\-\.])(career(s|jet)|recruit|staffing|talent|hr(pro|d|m)\b|work4|gius)"
 
 
 @dataclass

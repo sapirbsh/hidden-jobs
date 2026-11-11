@@ -18,7 +18,7 @@ from .fetcher import Fetcher
 from .matcher import RoleMatcher, expand_roles
 from .places import City, Place, PlacesClient, collect_places
 from .role_profiles import targeting_for_roles
-from .util import Budget, Progress, homepage_of
+from .util import Budget, Progress, homepage_of, is_job_board
 
 ISRAEL_WORDS = ["israel", "ישראל", "remote", "hybrid", "היברידי", "מרחוק"]
 
@@ -117,6 +117,12 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
         for dom, url in dork_domains.items():
             if dom not in places:
                 places[dom] = Place("", dom, homepage_of(url), dom, "", "", [], source="dork")
+        boards = [d for d in places if is_job_board(d)]
+        for d in boards:
+            del places[d]
+        if boards:
+            progress.counters["job_boards_filtered"] = len(boards)
+        dork_jobs = [j for j in dork_jobs if not is_job_board(j.url)]
         progress.counters["companies_total"] = len(places)
         progress.add_log(f"נאספו {len(places)} אתרים ייחודיים")
 
@@ -146,7 +152,8 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
             if progress.stage_done % 100 == 0:
                 progress.add_log(f"נבדקו {progress.stage_done}/{len(places)} אתרים · "
                                  f"{progress.counters.get('with_careers', 0)} עם עמוד קריירה")
-        with_careers = [i for i in infos.values() if i.career_url or i.ats]
+        with_careers = [i for i in infos.values() if (i.career_url or i.ats) and i.status != "job-board"]
+        progress.counters["job_boards_filtered"] = len(boards) + sum(i.status == "job-board" for i in infos.values())
         progress.add_log(f"נמצאו {len(with_careers)} אתרים עם עמוד קריירה מתוך {len(infos)}")
 
         # ---------------- stage 3: match roles ----------------
@@ -173,6 +180,8 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
                 "positions_seen": total, "matches": len(jobs), "source": place.source if place else "",
             })
             for j in jobs:
+                if is_job_board(j.url):     # a company page that only links out to a job board
+                    continue
                 all_jobs.append(_job_row(j, place, info.domain, city_names))
             progress.counters["matches"] = len(all_jobs)
 
@@ -196,8 +205,8 @@ async def run_search(req: SearchRequest, settings: Settings, progress: Progress,
         "companies_with_careers": companies_out,
         "companies_without_careers": [
             {"company": places[d].name if d in places else d, "domain": d, "homepage": i.homepage, "status": i.status}
-            for d, i in infos.items() if not (i.career_url or i.ats)
-        ],
+            for d, i in infos.items() if not (i.career_url or i.ats) or i.status == "job-board"
+        ] + [{"company": d, "domain": d, "homepage": "https://" + d, "status": "job-board"} for d in boards],
     }
     return result
 

@@ -1,13 +1,14 @@
 """Shared helpers: URL/domain normalisation, request budget, progress reporting."""
 from __future__ import annotations
 
+import re
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable
 from urllib.parse import urlparse, urlunparse
 
-from .config import IGNORED_WEBSITE_DOMAINS, JOB_BOARD_DOMAINS
+from .config import BASE_DIR, IGNORED_WEBSITE_DOMAINS, JOB_BOARD_DOMAINS, JOB_BOARD_NAME_PATTERN
 
 
 def registrable_domain(url: str) -> str:
@@ -27,8 +28,42 @@ def is_ignored_site(url: str) -> bool:
     return not host or _domain_in(host, IGNORED_WEBSITE_DOMAINS)
 
 
+_NAME_RX = re.compile(JOB_BOARD_NAME_PATTERN, re.I)
+BLOCKLIST_PATH = BASE_DIR / "data" / "blocklist.txt"
+_block_cache: tuple[float, set[str]] = (0.0, set())
+
+
+def blocked_domains() -> set[str]:
+    """Domains the user blocked from the UI (data/blocklist.txt, one per line)."""
+    global _block_cache
+    try:
+        mtime = BLOCKLIST_PATH.stat().st_mtime
+    except FileNotFoundError:
+        return set()
+    if mtime != _block_cache[0]:
+        lines = BLOCKLIST_PATH.read_text(encoding="utf-8").splitlines()
+        _block_cache = (mtime, {registrable_domain(x.strip()) for x in lines if x.strip() and not x.startswith("#")})
+    return _block_cache[1]
+
+
+def block_domain(domain: str) -> None:
+    domain = registrable_domain(domain)
+    if not domain or domain in blocked_domains():
+        return
+    BLOCKLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with BLOCKLIST_PATH.open("a", encoding="utf-8") as f:
+        f.write(domain + "\n")
+
+
 def is_job_board(url: str) -> bool:
-    return _domain_in(registrable_domain(url), JOB_BOARD_DOMAINS)
+    host = registrable_domain(url)
+    if not host:
+        return False
+    if _domain_in(host, JOB_BOARD_DOMAINS) or _domain_in(host, blocked_domains()):
+        return True
+    main_label = host.split(".")[0] if not host.startswith(("jobs.", "careers.")) else host.split(".")[1]
+    # e.g. "jobify360", "drushim-online" — but NOT company career subdomains like careers.acme.com
+    return bool(_NAME_RX.search(main_label))
 
 
 def homepage_of(url: str) -> str:

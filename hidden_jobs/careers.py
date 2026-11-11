@@ -12,7 +12,7 @@ from .ats import AtsRef, Job, detect_ats, fetch_ats_jobs
 from .cache import DAY, Cache
 from .fetcher import Fetcher
 from .matcher import RoleMatcher
-from .util import registrable_domain
+from .util import is_job_board, registrable_domain
 
 # ---------------------------------------------------------------- keywords
 HREF_KEYWORDS = [
@@ -42,6 +42,13 @@ NEG_TEXT = re.compile(r"(steve jobs|blog|news|privacy|terms)", re.I)
 
 _TEXT_RX = re.compile("|".join(re.escape(k) for k in TEXT_KEYWORDS), re.I)
 
+# phrases that identify a job board / placement agency from its homepage title, description or H1
+JOB_BOARD_PHRASES = re.compile(
+    r"(לוח (ה)?דרושים|לוח (ה)?משרות|אתר (ה)?דרושים|חיפוש עבודה|מחפשים עבודה|מחפש עבודה|אלפי משרות|"
+    r"משרות (חמות|בכל הארץ|באזור)|חברת השמה|השמת עובדים|גיוס והשמה|השמה וגיוס|ייעוץ תעסוקתי|"
+    r"job board|find (a |your next )?jobs?|search (for )?jobs|thousands of jobs|jobs in israel|"
+    r"staffing (agency|company)|recruitment agency|headhunt)", re.I)
+
 
 @dataclass
 class CareerInfo:
@@ -50,7 +57,7 @@ class CareerInfo:
     career_url: str | None = None
     method: str = ""                  # "link", "path", "ats-on-home", "dork"
     ats: list[AtsRef] = field(default_factory=list)
-    status: str = "ok"                # ok | unreachable | no-careers
+    status: str = "ok"                # ok | unreachable | no-careers | job-board
 
     def to_dict(self) -> dict:
         return {"domain": self.domain, "homepage": self.homepage, "career_url": self.career_url,
@@ -96,6 +103,17 @@ def find_career_links(html: str, base_url: str, domain: str) -> list[tuple[int, 
     return sorted(((s, u) for u, s in cands.items()), reverse=True)
 
 
+def looks_like_job_board(html: str) -> bool:
+    soup = BeautifulSoup(html, "lxml")
+    meta = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
+    head = " ".join([
+        soup.title.get_text(" ", strip=True) if soup.title else "",
+        meta.get("content", "") if meta else "",
+        " ".join(h.get_text(" ", strip=True) for h in soup.find_all("h1")[:3]),
+    ])
+    return bool(JOB_BOARD_PHRASES.search(head))
+
+
 def page_looks_like_careers(html: str) -> bool:
     soup = BeautifulSoup(html, "lxml")
     title = (soup.title.get_text() if soup.title else "") + " " + " ".join(
@@ -105,11 +123,11 @@ def page_looks_like_careers(html: str) -> bool:
 
 # ---------------------------------------------------------------- stage 2
 async def find_careers(domain: str, website: str, fetcher: Fetcher, cache: Cache) -> CareerInfo:
-    cached = cache.get("careers", domain, max_age=7 * DAY)
+    cached = cache.get("careers2", domain, max_age=7 * DAY)
     if cached:
         return CareerInfo.from_dict(cached)
     info = await _find_careers_uncached(domain, website, fetcher)
-    cache.set("careers", domain, info.to_dict())
+    cache.set("careers2", domain, info.to_dict())
     return info
 
 
@@ -118,6 +136,9 @@ async def _find_careers_uncached(domain: str, website: str, fetcher: Fetcher) ->
     info = CareerInfo(domain=domain, homepage=website)
     if not home or home.status >= 400:
         info.status = "unreachable"
+        return info
+    if is_job_board(home.url) or looks_like_job_board(home.html):
+        info.status = "job-board"
         return info
     info.ats = detect_ats(home.html, home.url)
 

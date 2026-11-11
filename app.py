@@ -14,7 +14,7 @@ from hidden_jobs.config import settings
 from hidden_jobs.matcher import expand_roles
 from hidden_jobs.role_profiles import targeting_for_roles
 from hidden_jobs.pipeline import SearchRequest, run_search, save_result
-from hidden_jobs.util import Progress
+from hidden_jobs.util import Progress, block_domain, blocked_domains, is_job_board
 
 app = Flask(__name__)
 JOBS: dict[str, dict] = {}   # job_id -> {"progress": Progress, "result": dict|None}
@@ -91,26 +91,34 @@ def status(job_id: str):
     return jsonify(out)
 
 
-@app.get("/api/result/<job_id>")
-def result(job_id: str):
-    job = JOBS.get(job_id)
-    if job and job["result"] is not None:
-        return Response(json.dumps(job["result"], ensure_ascii=False), mimetype="application/json")
-    path = settings.results_dir / f"{job_id}.json"
-    if path.exists():
-        return Response(path.read_text(encoding="utf-8"), mimetype="application/json")
-    return jsonify({"error": "not ready"}), 404
-
-
-@app.get("/api/result/<job_id>.csv")
-def result_csv(job_id: str):
+def _load_result(job_id: str) -> dict | None:
     job = JOBS.get(job_id)
     res = job["result"] if job else None
     if res is None:
         path = settings.results_dir / f"{job_id}.json"
         if not path.exists():
-            return jsonify({"error": "not ready"}), 404
+            return None
         res = json.loads(path.read_text(encoding="utf-8"))
+    # hide sites blocked after the search ran (also cleans up old saved results)
+    res = dict(res)
+    res["jobs"] = [j for j in res["jobs"] if not (is_job_board(j["url"]) or is_job_board(j.get("domain") or ""))]
+    res["companies_with_careers"] = [c for c in res["companies_with_careers"] if not is_job_board(c["domain"])]
+    return res
+
+
+@app.get("/api/result/<job_id>")
+def result(job_id: str):
+    res = _load_result(job_id)
+    if res is None:
+        return jsonify({"error": "not ready"}), 404
+    return Response(json.dumps(res, ensure_ascii=False), mimetype="application/json")
+
+
+@app.get("/api/result/<job_id>.csv")
+def result_csv(job_id: str):
+    res = _load_result(job_id)
+    if res is None:
+        return jsonify({"error": "not ready"}), 404
     buf = io.StringIO()
     buf.write("﻿")  # BOM so Excel shows Hebrew correctly
     cols = ["company", "title", "url", "location", "role", "matched_term", "source", "domain", "company_city"]
@@ -119,6 +127,13 @@ def result_csv(job_id: str):
     w.writerows(res["jobs"])
     return Response(buf.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition": f"attachment; filename=jobs_{job_id}.csv"})
+
+
+@app.post("/api/block")
+def block():
+    domain = (request.get_json(force=True) or {}).get("domain", "")
+    block_domain(domain)
+    return jsonify({"blocked": sorted(blocked_domains())})
 
 
 @app.get("/api/history")

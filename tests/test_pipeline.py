@@ -28,7 +28,8 @@ def place(i, name, site, types=("corporate_office",)):
 REAL = [place(1, "Acme", "https://www.acme.co.il/"), place(2, "Beta Security", "https://beta.com"),
         place(3, "Gamma Networks", "https://gamma.co.il"), place(4, "Delta Bakery", "https://delta.com"),
         place(5, "Down Corp", "https://down.com"), place(6, "FB Only", "https://facebook.com/somebiz"),
-        place(7, "Kiosk Yossi", "https://kiosk-yossi.co.il", ("convenience_store", "store"))]
+        place(7, "Kiosk Yossi", "https://kiosk-yossi.co.il", ("convenience_store", "store")),
+        place(8, "Portal", "https://hasif.co.il")]
 FILLER = [place(100 + i, f"Filler {i}", f"https://filler{i}.com") for i in range(60)]
 calls = {"places": 0, "boxes": set()}
 
@@ -66,6 +67,8 @@ SITES = {
         "<script src='https://boards.greenhouse.io/embed/job_board/js?for=betasec'></script></body></html>",
     "https://gamma.co.il/": "<html><body><a href='https://www.comeet.com/jobs/gamma/A1.B2C'>Join us</a></body></html>",
     "https://delta.com/": "<html><body><h1>Fresh bread</h1><a href='/menu'>Menu</a></body></html>",
+    "https://hasif.co.il/": "<html><head><title>חסיף — לוח הדרושים המוביל בישראל</title></head><body>"
+                            "<a href='/careers'>דרושים</a><a href='/j/1'>SOC Analyst at SomeCo</a></body></html>",
     "https://epsilon.co.il/": "<html><body><a href='/jobs'>Jobs</a></body></html>",
     "https://epsilon.co.il/jobs": "<html><head><title>Jobs</title></head><body><h2>Open positions</h2>"
         "<a href='/jobs/noc-1'>NOC Engineer - Night shifts</a></body></html>",
@@ -82,6 +85,8 @@ SERPER = {"organic": [
     {"title": "SOC Analyst - Zeta | Comeet", "link": "https://www.comeet.com/jobs/zeta/C3.D4E/soc-analyst/22.222", "snippet": "Petah Tikva"},
     {"title": "NOC Engineer at Epsilon", "link": "https://epsilon.co.il/jobs/noc-1", "snippet": "פתח תקווה"},
     {"title": "SOC Analyst - LinkedIn", "link": "https://il.linkedin.com/jobs/view/123", "snippet": "x"},
+    {"title": "דרוש/ה אנליסט SOC פתח תקווה", "link": "https://www.jobify360.co.il/jobs/soc-555", "snippet": "פתח תקווה"},
+    {"title": "SOC Analyst Petah Tikva", "link": "https://www.cyber-drushim.co.il/jobs/77", "snippet": "פתח תקווה"},
 ]}
 
 
@@ -138,6 +143,15 @@ def test_targeting_by_role():
     assert is_excluded_type(["convenience_store", "store"]) and not is_excluded_type(["corporate_office", "store"])
 
 
+def test_user_blocklist(tmp_path, monkeypatch):
+    import hidden_jobs.util as u
+    monkeypatch.setattr(u, "BLOCKLIST_PATH", tmp_path / "blocklist.txt")
+    assert not u.is_job_board("https://www.someboard.co.il/x")
+    u.block_domain("https://www.someboard.co.il/x")
+    assert u.is_job_board("someboard.co.il") and u.is_job_board("https://sub.someboard.co.il/a")
+    assert not u.is_job_board("cyberark.com")
+
+
 def test_box_split():
     b = Box(0, 0, 1, 1)
     assert len(b.split()) == 4 and b.split()[3].south == 0.5
@@ -169,6 +183,10 @@ def test_end_to_end(tmp_path):
     assert any("zeta" in j["url"] for j in result["jobs"])
     assert any(j["domain"] == "epsilon.co.il" for j in result["jobs"])
     assert not any("linkedin" in j["url"] for j in result["jobs"])
+    # job boards: by list (jobify360), by name (cyber-drushim) and by homepage content (hasif "לוח הדרושים")
+    assert not any(x in j["url"] for j in result["jobs"] for x in ("jobify360", "drushim", "hasif"))
+    statuses = {c["domain"]: c["status"] for c in result["companies_without_careers"]}
+    assert statuses.get("hasif.co.il") == "job-board"
     # same URL found by both careers crawl and dorking appears once
     assert sum(j["url"] == "https://epsilon.co.il/jobs/noc-1" for j in result["jobs"]) == 1
     # facebook-only site skipped, delta has no careers, down is unreachable

@@ -59,6 +59,8 @@
   .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
   .hidden{display:none}
   .err{color:var(--bad)}
+  button.blk{background:none;border:1px solid var(--line);color:var(--muted);border-radius:6px;cursor:pointer;padding:2px 7px;font-size:12px}
+  button.blk:hover{border-color:var(--bad);color:var(--bad)}
   .history a{color:var(--accent2);cursor:pointer;margin-left:14px;font-size:13px}
 </style>
 </head>
@@ -159,7 +161,8 @@
 const LABELS = {places_requests:"בקשות Places", places_cache_hits:"מהמטמון", places_with_site:"מקומות עם אתר",
   tiles_split:"פיצולי אזור", search_requests:"שאילתות Dork", dork_domains:"אתרים מ-Dork", dork_hits:"משרות מ-Dork",
   companies_total:"סה״כ אתרים", sites_checked:"אתרים נבדקו", with_careers:"עם עמוד קריירה",
-  careers_scanned:"עמודי קריירה נסרקו", matches:"התאמות"};
+  careers_scanned:"עמודי קריירה נסרקו", matches:"התאמות", places_filtered_type:"סוננו (חנויות/מסעדות)",
+  job_boards_filtered:"לוחות דרושים שסוננו"};
 
 function chips(id,onChange){
   const box=document.getElementById(id), input=box.querySelector('input'), vals=[];
@@ -227,6 +230,14 @@ $('filter').oninput=draw; $('only_extra').onchange=preview; $('use_synonyms').on
 function fmt(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),x=sec%60;
   return h?`${h}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`:`${m}:${String(x).padStart(2,'0')}`}
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function blk(d){return d?`<button class="blk" title="זה לוח דרושים / לא רלוונטי — חסום לתמיד" onclick="blockDomain('${esc(d)}')">🚫 חסום</button>`:''}
+async function blockDomain(d){
+  if(!confirm('לחסום את '+d+' בכל החיפושים מעכשיו?'))return;
+  await fetch('/api/block',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain:d})});
+  RESULT.jobs=RESULT.jobs.filter(j=>j.domain!==d);
+  RESULT.companies_with_careers=RESULT.companies_with_careers.filter(c=>c.domain!==d);
+  $('nJobs').textContent='('+RESULT.jobs.length+')'; $('nWith').textContent='('+RESULT.companies_with_careers.length+')'; draw();
+}
 function link(u,t){return u?`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t||u)}</a>`:''}
 
 function draw(){
@@ -235,20 +246,20 @@ function draw(){
   let html='';
   if(TAB==='jobs'){
     const rows=RESULT.jobs.filter(f).filter(j=>!$('onlyLocal').checked||j.location_ok);
-    html='<table><tr><th>חברה</th><th>תפקיד</th><th>מיקום</th><th>התאמה</th><th>מקור</th></tr>'+rows.map(j=>
+    html='<table><tr><th>חברה</th><th>תפקיד</th><th>מיקום</th><th>התאמה</th><th>מקור</th><th></th></tr>'+rows.map(j=>
       `<tr class="${j.location_ok?'':'far'}"><td>${esc(j.company)}<div class="src">${esc(j.domain)}</div></td>
        <td>${link(j.url,j.title)}</td><td>${esc(j.location||j.company_city)}</td>
-       <td>${esc(j.role)}<div class="src">${esc(j.matched_term)}</div></td><td class="src">${esc(j.source)}</td></tr>`).join('')+'</table>';
+       <td>${esc(j.role)}<div class="src">${esc(j.matched_term)}</div></td><td class="src">${esc(j.source)}</td><td>${blk(j.domain)}</td></tr>`).join('')+'</table>';
     if(!rows.length) html='<p>לא נמצאו משרות תואמות. נסה עומק "מקיף", מילים נרדפות נוספות, או עיין בלשונית "חברות עם עמוד קריירה".</p>';
   } else if(TAB==='with'){
     const rows=RESULT.companies_with_careers.filter(f);
-    html='<table><tr><th>חברה</th><th>עיר</th><th>עמוד קריירה</th><th>ATS</th><th>משרות באתר</th><th>התאמות</th></tr>'+rows.map(c=>
+    html='<table><tr><th>חברה</th><th>עיר</th><th>עמוד קריירה</th><th>ATS</th><th>משרות באתר</th><th>התאמות</th><th></th></tr>'+rows.map(c=>
       `<tr><td>${esc(c.company)}<div class="src">${esc(c.domain)}</div></td><td>${esc(c.city)}</td>
-       <td>${link(c.career_url,'פתח')}</td><td class="src">${esc(c.ats.join(', '))}</td><td>${c.positions_seen}</td><td><b>${c.matches}</b></td></tr>`).join('')+'</table>';
+       <td>${link(c.career_url,'פתח')}</td><td class="src">${esc(c.ats.join(', '))}</td><td>${c.positions_seen}</td><td><b>${c.matches}</b></td><td>${blk(c.domain)}</td></tr>`).join('')+'</table>';
   } else {
     const rows=RESULT.companies_without_careers.filter(f);
     html='<table><tr><th>חברה</th><th>אתר</th><th>סטטוס</th></tr>'+rows.map(c=>
-      `<tr><td>${esc(c.company)}</td><td>${link(c.homepage,c.domain)}</td><td class="src">${c.status==='unreachable'?'האתר לא נגיש':'לא נמצא עמוד דרושים'}</td></tr>`).join('')+'</table>';
+      `<tr><td>${esc(c.company)}</td><td>${link(c.homepage,c.domain)}</td><td class="src">${({unreachable:'האתר לא נגיש','job-board':'לוח דרושים / חברת השמה (סונן)'})[c.status]||'לא נמצא עמוד דרושים'}</td></tr>`).join('')+'</table>';
   }
   $('tableWrap').innerHTML=html;
 }

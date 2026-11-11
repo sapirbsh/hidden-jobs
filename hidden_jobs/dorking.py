@@ -20,7 +20,7 @@ from .util import Budget, BudgetExceeded, Progress, is_ignored_site, is_job_boar
 ATS_SITES = ["comeet.com", "boards.greenhouse.io", "job-boards.greenhouse.io", "jobs.lever.co",
              "jobs.ashbyhq.com", "apply.workable.com", "jobs.smartrecruiters.com", "breezy.hr", "bamboohr.com"]
 # Google ignores everything after 32 words, so keep exclusions short
-EXCLUDE = " ".join(f"-site:{d}" for d in JOB_BOARD_DOMAINS[:8])
+EXCLUDE = " ".join(f"-site:{d}" for d in JOB_BOARD_DOMAINS[:10])
 
 
 @dataclass
