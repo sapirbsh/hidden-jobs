@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hidden Jobs — חיפוש משרות נסתרות</title>
+<style>
+  :root{--bg:#17171c;--panel:#22222a;--panel2:#2b2b35;--line:#383845;--text:#ececf1;--muted:#9a9aab;
+        --accent:#8b5cf6;--accent2:#a78bfa;--ok:#34d399;--warn:#fbbf24;--bad:#f87171}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",Arial,"Heebo",sans-serif;font-size:15px}
+  header{padding:22px 28px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px}
+  header h1{margin:0;font-size:22px}
+  header span{color:var(--muted);font-size:14px}
+  main{max-width:1250px;margin:0 auto;padding:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:800px){.grid{grid-template-columns:1fr}}
+  label.t{display:block;font-weight:600;margin-bottom:6px}
+  .hint{color:var(--muted);font-size:13px;margin-top:5px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px;min-height:46px;cursor:text}
+  .chip{background:var(--accent);color:#fff;border-radius:999px;padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:14px}
+  .chip b{cursor:pointer;opacity:.8}
+  .chips input{flex:1;min-width:140px;background:transparent;border:0;color:var(--text);font-size:15px;outline:none;padding:4px}
+  select,input[type=number],input[type=text].f{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px}
+  .opts{display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-top:14px}
+  .opts label{display:flex;gap:6px;align-items:center;color:var(--text)}
+  details{margin-top:14px} summary{cursor:pointer;color:var(--accent2)}
+  button.go{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:12px 34px;font-size:17px;font-weight:700;cursor:pointer;margin-top:18px}
+  button.go:disabled{opacity:.5;cursor:default}
+  .keys{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+  .pill{font-size:12px;border-radius:999px;padding:3px 10px;border:1px solid var(--line)}
+  .pill.on{color:var(--ok);border-color:var(--ok)} .pill.off{color:var(--bad);border-color:var(--bad)}
+  .steps{display:flex;gap:10px;margin-bottom:14px}
+  .step{flex:1;background:var(--panel2);border-radius:8px;padding:10px;border:1px solid var(--line);color:var(--muted);font-size:14px}
+  .step.active{border-color:var(--accent);color:var(--text)} .step.done{border-color:var(--ok);color:var(--ok)}
+  .counters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+  .ctr{background:var(--panel2);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--muted)}
+  .ctr b{display:block;font-size:20px;color:var(--text)}
+  pre.log{background:#111116;border-radius:8px;padding:10px;max-height:200px;overflow:auto;font-family:"Courier New",monospace;font-size:12.5px;color:#c9c9d6;margin:0;direction:rtl;white-space:pre-wrap}
+  .tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .tab{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 14px;cursor:pointer}
+  .tab.active{background:var(--accent);border-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:right;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}
+  td a{color:var(--accent2);text-decoration:none} td a:hover{text-decoration:underline}
+  .src{font-size:12px;color:var(--muted)}
+  .far{opacity:.55}
+  .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .hidden{display:none}
+  .err{color:var(--bad)}
+  .history a{color:var(--accent2);cursor:pointer;margin-left:14px;font-size:13px}
+</style>
+</head>
+<body>
+<header><h1>🔎 Hidden Jobs</h1><span>משרות שמתפרסמות רק באתרי החברות — לא בלוחות הדרושים</span></header>
+<main>
+
+<div class="card">
+  <div class="grid">
+    <div>
+      <label class="t">ערים</label>
+      <div class="chips" id="cities"><input placeholder="למשל: פתח תקווה ↵"></div>
+      <div class="hint">אפשר כמה ערים. Enter או פסיק להוספה.</div>
+    </div>
+    <div>
+      <label class="t">תפקידים</label>
+      <div class="chips" id="roles"><input placeholder="למשל: SOC ↵"></div>
+      <div class="hint">עברית או אנגלית. המערכת מרחיבה אוטומטית למילים נרדפות (SOC → אנליסט SOC, Tier 1…).</div>
+    </div>
+  </div>
+
+  <div class="opts">
+    <label>עומק חיפוש
+      <select id="level">
+        <option value="quick">מהיר (זול)</option>
+        <option value="normal" selected>רגיל</option>
+        <option value="deep">מקיף מאוד (יקר)</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="use_maps" checked> גוגל מפות</label>
+    <label><input type="checkbox" id="use_dorking" checked> Google Dorking</label>
+    <label><input type="checkbox" id="use_synonyms" checked> מילים נרדפות</label>
+  </div>
+  <div class="keys">
+    <span class="pill {{ 'on' if has_maps else 'off' }}">Google Maps key {{ '✓' if has_maps else '✗' }}</span>
+    <span class="pill {{ 'on' if has_search else 'off' }}">Search API ({{ provider }}) {{ '✓' if has_search else '✗' }}</span>
+  </div>
+
+  <details>
+    <summary>הגדרות מתקדמות</summary>
+    <div class="grid" style="margin-top:12px">
+      <div>
+        <label class="t">קטגוריות נוספות לגוגל מפות</label>
+        <div class="chips" id="cats"><input placeholder="למשל: חברת סייבר ↵"></div>
+        <label style="margin-top:8px;display:flex;gap:6px"><input type="checkbox" id="only_extra"> לחפש רק בקטגוריות שלי (במקום רשימת ברירת המחדל)</label>
+      </div>
+      <div>
+        <label class="t">תקרת בקשות (הגנה על התקציב)</label>
+        Google Places: <input type="number" id="max_places" value="{{ max_places }}" style="width:90px">
+        &nbsp; Search API: <input type="number" id="max_search" value="{{ max_search }}" style="width:90px">
+        <div class="hint">החיפוש נעצר בתקרה וממשיך עם מה שנאסף. תוצאות נשמרות במטמון — חיפוש חוזר כמעט חינמי.</div>
+      </div>
+    </div>
+  </details>
+
+  <button class="go" id="go">חפש</button>
+  <div class="history" id="history" style="margin-top:12px"></div>
+</div>
+
+<div class="card hidden" id="progressCard">
+  <div class="steps">
+    <div class="step" data-s="places">1. איסוף מקומות</div>
+    <div class="step" data-s="careers">2. איתור עמודי דרושים</div>
+    <div class="step" data-s="jobs">3. חיפוש התפקידים</div>
+  </div>
+  <div class="counters" id="counters"></div>
+  <pre class="log" id="log"></pre>
+</div>
+
+<div class="card hidden" id="resultsCard">
+  <div class="tabs">
+    <button class="tab active" data-tab="jobs">משרות שנמצאו <span id="nJobs"></span></button>
+    <button class="tab" data-tab="with">חברות עם עמוד קריירה <span id="nWith"></span></button>
+    <button class="tab" data-tab="without">בלי עמוד קריירה <span id="nWithout"></span></button>
+  </div>
+  <div class="toolbar">
+    <input type="text" class="f" id="filter" placeholder="סינון…" style="width:240px">
+    <label><input type="checkbox" id="onlyLocal"> רק משרות בערים שבחרתי / ישראל</label>
+    <a id="csv" class="tab" style="text-decoration:none">⬇ CSV</a>
+  </div>
+  <div id="tableWrap" style="max-height:640px;overflow:auto"></div>
+</div>
+
+</main>
+<script>
+const LABELS = {places_requests:"בקשות Places", places_cache_hits:"מהמטמון", places_with_site:"מקומות עם אתר",
+  tiles_split:"פיצולי אזור", search_requests:"שאילתות Dork", dork_domains:"אתרים מ-Dork", dork_hits:"משרות מ-Dork",
+  companies_total:"סה״כ אתרים", sites_checked:"אתרים נבדקו", with_careers:"עם עמוד קריירה",
+  careers_scanned:"עמודי קריירה נסרקו", matches:"התאמות"};
+
+function chips(id){
+  const box=document.getElementById(id), input=box.querySelector('input'), vals=[];
+  const render=()=>{box.querySelectorAll('.chip').forEach(c=>c.remove());
+    vals.forEach((v,i)=>{const c=document.createElement('span');c.className='chip';c.textContent=v;
+      const x=document.createElement('b');x.textContent='×';x.onclick=()=>{vals.splice(i,1);render()};c.appendChild(x);box.insertBefore(c,input)})};
+  const add=()=>{input.value.split(',').map(s=>s.trim()).filter(Boolean).forEach(v=>{if(!vals.includes(v))vals.push(v)});input.value='';render()};
+  input.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();add()}
+    else if(e.key==='Backspace'&&!input.value&&vals.length){vals.pop();render()}});
+  input.addEventListener('blur',add); box.addEventListener('click',()=>input.focus());
+  return {get:()=>{add();return vals.slice()}, set:a=>{vals.splice(0,vals.length,...a);render()}};
+}
+const cities=chips('cities'), roles=chips('roles'), cats=chips('cats');
+const $=id=>document.getElementById(id);
+let RESULT=null, TAB='jobs', JOB=null;
+
+$('go').onclick=async()=>{
+  const body={cities:cities.get(),roles:roles.get(),extra_categories:cats.get(),level:$('level').value,
+    use_maps:$('use_maps').checked,use_dorking:$('use_dorking').checked,use_synonyms:$('use_synonyms').checked,
+    only_extra_categories:$('only_extra').checked,max_places:+$('max_places').value,max_search:+$('max_search').value};
+  if(!body.cities.length||!body.roles.length){alert('צריך עיר אחת ותפקיד אחד לפחות');return}
+  $('go').disabled=true; $('resultsCard').classList.add('hidden'); $('progressCard').classList.remove('hidden');
+  const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json(); if(d.error){alert(d.error);$('go').disabled=false;return}
+  JOB=d.job_id; poll();
+};
+
+async function poll(){
+  const s=await (await fetch('/api/status/'+JOB)).json();
+  const order=['places','careers','jobs','done'];
+  document.querySelectorAll('.step').forEach(el=>{const i=order.indexOf(el.dataset.s),cur=order.indexOf(s.stage);
+    el.className='step'+(cur>i?' done':cur===i?' active':'')});
+  $('counters').innerHTML=Object.entries(s.counters).map(([k,v])=>`<div class="ctr"><b>${v}</b>${LABELS[k]||k}</div>`).join('');
+  $('log').textContent=s.log.join('\n'); $('log').scrollTop=1e9;
+  if(s.error) $('log').innerHTML+=`\n<span class="err">${esc(s.error)}</span>`;
+  if(!s.done){setTimeout(poll,1500);return}
+  $('go').disabled=false; loadHistory();
+  if(s.has_result) loadResult(JOB);
+}
+
+async function loadResult(id){
+  JOB=id; RESULT=await (await fetch('/api/result/'+id)).json();
+  $('resultsCard').classList.remove('hidden'); $('csv').href='/api/result/'+id+'.csv';
+  $('nJobs').textContent='('+RESULT.jobs.length+')'; $('nWith').textContent='('+RESULT.companies_with_careers.length+')';
+  $('nWithout').textContent='('+RESULT.companies_without_careers.length+')'; draw();
+}
+
+document.querySelectorAll('.tab[data-tab]').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab[data-tab]').forEach(x=>x.classList.remove('active'));t.classList.add('active');TAB=t.dataset.tab;draw()});
+$('filter').oninput=draw; $('onlyLocal').onchange=draw;
+
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function link(u,t){return u?`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t||u)}</a>`:''}
+
+function draw(){
+  if(!RESULT) return;
+  const q=$('filter').value.trim().toLowerCase(), f=o=>!q||JSON.stringify(o).toLowerCase().includes(q);
+  let html='';
+  if(TAB==='jobs'){
+    const rows=RESULT.jobs.filter(f).filter(j=>!$('onlyLocal').checked||j.location_ok);
+    html='<table><tr><th>חברה</th><th>תפקיד</th><th>מיקום</th><th>התאמה</th><th>מקור</th></tr>'+rows.map(j=>
+      `<tr class="${j.location_ok?'':'far'}"><td>${esc(j.company)}<div class="src">${esc(j.domain)}</div></td>
+       <td>${link(j.url,j.title)}</td><td>${esc(j.location||j.company_city)}</td>
+       <td>${esc(j.role)}<div class="src">${esc(j.matched_term)}</div></td><td class="src">${esc(j.source)}</td></tr>`).join('')+'</table>';
+    if(!rows.length) html='<p>לא נמצאו משרות תואמות. נסה עומק "מקיף", מילים נרדפות נוספות, או עיין בלשונית "חברות עם עמוד קריירה".</p>';
+  } else if(TAB==='with'){
+    const rows=RESULT.companies_with_careers.filter(f);
+    html='<table><tr><th>חברה</th><th>עיר</th><th>עמוד קריירה</th><th>ATS</th><th>משרות באתר</th><th>התאמות</th></tr>'+rows.map(c=>
+      `<tr><td>${esc(c.company)}<div class="src">${esc(c.domain)}</div></td><td>${esc(c.city)}</td>
+       <td>${link(c.career_url,'פתח')}</td><td class="src">${esc(c.ats.join(', '))}</td><td>${c.positions_seen}</td><td><b>${c.matches}</b></td></tr>`).join('')+'</table>';
+  } else {
+    const rows=RESULT.companies_without_careers.filter(f);
+    html='<table><tr><th>חברה</th><th>אתר</th><th>סטטוס</th></tr>'+rows.map(c=>
+      `<tr><td>${esc(c.company)}</td><td>${link(c.homepage,c.domain)}</td><td class="src">${c.status==='unreachable'?'האתר לא נגיש':'לא נמצא עמוד דרושים'}</td></tr>`).join('')+'</table>';
+  }
+  $('tableWrap').innerHTML=html;
+}
+
+async function loadHistory(){
+  const h=await (await fetch('/api/history')).json();
+  $('history').innerHTML=h.length?'<span class="hint">חיפושים קודמים: </span>'+h.map(x=>
+    `<a data-id="${x.job_id}">${esc(x.cities.join(', '))} · ${esc(x.roles.join(', '))} (${x.matches})</a>`).join(''):'';
+  $('history').querySelectorAll('a').forEach(a=>a.onclick=()=>loadResult(a.dataset.id));
+}
+loadHistory();
+</script>
+</body>
+</html>
